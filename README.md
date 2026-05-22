@@ -24,6 +24,8 @@ The local platform currently supports:
 - Gold transaction monitoring dashboard dataset
 - Gold fraud investigation case dataset
 - Bronze, Silver, and Gold validation scripts
+- Quarantine handling for rejected Silver records
+- Pipeline audit and Gold pipeline health observability
 
 The project now follows a medallion-style local lakehouse flow:
 
@@ -40,6 +42,7 @@ Current engineering focus:
 - Rerun safety and idempotency
 - Data quality checks per partition
 - Auditability through Kafka topic, partition, offset, and ingest metadata
+- Rejected-record traceability through quarantine records
 
 ## Recommended Run Pattern
 
