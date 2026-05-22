@@ -11,10 +11,12 @@ from dotenv import load_dotenv
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from common.pipeline_audit import write_pipeline_audit_event
+from common.quarantine import write_quarantine_record
 
 
 BRONZE_PREFIX = "digital-activity/login-events/"
 SILVER_PREFIX = "digital-activity/login-events/"
+QUARANTINE_PREFIX = "silver-login-events"
 JOB_NAME = "silver_login_events"
 
 REQUIRED_FIELDS = {
@@ -158,6 +160,7 @@ def main():
     secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
     bronze_bucket = os.getenv("BRONZE_BUCKET", "banking-bronze")
     silver_bucket = os.getenv("SILVER_BUCKET", "banking-silver")
+    quarantine_bucket = os.getenv("QUARANTINE_BUCKET", "banking-quarantine")
 
     s3_client = build_minio_client(endpoint, access_key, secret_key)
 
@@ -167,13 +170,26 @@ def main():
 
     for object_key in list_objects(s3_client, bronze_bucket, bronze_input_prefix):
         read_count += 1
+        bronze_record = None
         try:
             bronze_record = read_json_object(s3_client, bronze_bucket, object_key)
             silver_record = transform_event(bronze_record)
             records_by_event_id[silver_record["event_id"]] = silver_record
         except Exception as exc:
             failed_count += 1
+            quarantine_key = write_quarantine_record(
+                s3_client=s3_client,
+                bucket=quarantine_bucket,
+                quarantine_prefix=QUARANTINE_PREFIX,
+                job_name=JOB_NAME,
+                process_date=process_date,
+                source_bucket=bronze_bucket,
+                source_object_key=object_key,
+                rejection_reason=str(exc),
+                raw_record=bronze_record,
+            )
             print(f"Rejected s3://{bronze_bucket}/{object_key}: {exc}")
+            print(f"Wrote quarantine record: s3://{quarantine_bucket}/{quarantine_key}")
 
     silver_records = sorted(records_by_event_id.values(), key=lambda item: item["event_id"])
 
