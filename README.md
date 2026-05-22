@@ -26,6 +26,7 @@ The local platform currently supports:
 - Bronze, Silver, and Gold validation scripts
 - Quarantine handling for rejected Silver records
 - Pipeline audit and Gold pipeline health observability
+- Spark standalone services for distributed processing practice
 
 The project now follows a medallion-style local lakehouse flow:
 

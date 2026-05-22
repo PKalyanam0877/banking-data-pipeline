@@ -80,6 +80,54 @@ services:
     networks:
       - banking_network
 
+  spark-master:
+    image: spark:3.5.8-python3
+    container_name: banking_spark_master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
+    ports:
+      - "${SPARK_MASTER_PORT:-7077}:7077"
+      - "${SPARK_MASTER_WEB_UI_PORT:-8080}:8080"
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+    volumes:
+      - ./src:/opt/spark/work-dir/src
+    depends_on:
+      - minio
+    networks:
+      - banking_network
+
+  spark-worker:
+    image: spark:3.5.8-python3
+    container_name: banking_spark_worker
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --webui-port
+      - "8081"
+    ports:
+      - "${SPARK_WORKER_WEB_UI_PORT:-8081}:8081"
+    environment:
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2G
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+    volumes:
+      - ./src:/opt/spark/work-dir/src
+    depends_on:
+      - spark-master
+    networks:
+      - banking_network
+
 volumes:
   postgres_data:
   kafka_data:
