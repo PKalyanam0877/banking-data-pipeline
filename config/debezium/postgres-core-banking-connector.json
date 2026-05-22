@@ -1,0 +1,23 @@
+{
+  "name": "postgres-core-banking-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "banking_user",
+    "database.password": "banking_password",
+    "database.dbname": "banking",
+    "database.server.name": "core-banking",
+    "topic.prefix": "banking.cdc.core-banking",
+    "schema.include.list": "public",
+    "table.include.list": "public.customers,public.accounts,public.account_balances,public.customer_risk_profiles",
+    "slot.name": "banking_core_banking_slot",
+    "publication.name": "banking_core_banking_publication",
+    "publication.autocreate.mode": "filtered",
+    "snapshot.mode": "initial",
+    "tombstones.on.delete": "false",
+    "decimal.handling.mode": "string",
+    "time.precision.mode": "adaptive_time_microseconds"
+  }
+}
