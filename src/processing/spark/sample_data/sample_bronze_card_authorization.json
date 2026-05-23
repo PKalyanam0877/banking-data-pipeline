@@ -1,0 +1,23 @@
+{
+  "bronze_ingest_time": "2026-05-21T18:00:00+00:00",
+  "kafka_topic": "banking.transaction.card-authorizations.v1",
+  "kafka_partition": 3,
+  "kafka_offset": 100,
+  "kafka_key": "card_300001",
+  "raw_value": "{\"event_id\":\"evt_card_auth_sample_001\",\"transaction_id\":\"txn_sample_001\",\"authorization_id\":\"auth_sample_001\",\"customer_id\":\"cust_100001\",\"account_id\":\"acct_200001\",\"card_id\":\"card_300001\",\"event_time\":\"2026-05-21T17:30:00+00:00\",\"amount\":\"42.50\",\"currency\":\"USD\",\"merchant_name\":\"Lakeview Grocery\",\"merchant_country\":\"US\",\"authorization_status\":\"approved\",\"channel\":\"card_present\"}",
+  "parsed_value": {
+    "event_id": "evt_card_auth_sample_001",
+    "transaction_id": "txn_sample_001",
+    "authorization_id": "auth_sample_001",
+    "customer_id": "cust_100001",
+    "account_id": "acct_200001",
+    "card_id": "card_300001",
+    "event_time": "2026-05-21T17:30:00+00:00",
+    "amount": "42.50",
+    "currency": "USD",
+    "merchant_name": "Lakeview Grocery",
+    "merchant_country": "US",
+    "authorization_status": "approved",
+    "channel": "card_present"
+  }
+}
