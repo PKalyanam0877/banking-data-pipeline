@@ -64,6 +64,20 @@ powershell -ExecutionPolicy Bypass -File scripts/setup/validate_gold_transaction
 This path proves the pipeline can replay a new partition from producers through Gold
 outputs and observability. Replace `2026-05-25` with the business date being tested.
 
+Run the full Phase 2 orchestration wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_fresh_partition_pipeline.ps1 -ProcessDate 2026-05-25
+```
+
+For replaying already-landed Bronze data without producing new Kafka events:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_fresh_partition_pipeline.ps1 -ProcessDate 2026-05-25 -SkipProducers
+```
+
+The manual command sequence below is kept as an expanded reference.
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup/check_platform_health.ps1
 ```
