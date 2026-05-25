@@ -58,3 +58,56 @@ powershell -ExecutionPolicy Bypass -File scripts/setup/validate_silver_card_auth
 powershell -ExecutionPolicy Bypass -File scripts/setup/run_gold_transaction_monitoring.ps1 -ProcessDate 2026-05-21
 powershell -ExecutionPolicy Bypass -File scripts/setup/validate_gold_transaction_monitoring.ps1 -ProcessDate 2026-05-21
 ```
+
+## Fresh Partition Demo Path
+
+This path proves the pipeline can replay a new partition from producers through Gold
+outputs and observability. Replace `2026-05-25` with the business date being tested.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/check_platform_health.ps1
+```
+
+Generate and land Bronze events:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_bulk_card_authorization_producer.ps1
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_bulk_bronze_card_authorization_writer.ps1 -IngestDate 2026-05-25
+
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_login_event_producer.ps1
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_bronze_login_events_writer.ps1 -IngestDate 2026-05-25
+
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_risk_event_producer.ps1
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_bronze_risk_events_writer.ps1 -IngestDate 2026-05-25
+```
+
+Run and validate Silver and Gold:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_silver_card_authorizations.ps1 -ProcessDate 2026-05-25
+powershell -ExecutionPolicy Bypass -File scripts/setup/validate_silver_card_authorizations.ps1 -ProcessDate 2026-05-25
+
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_silver_login_events.ps1 -ProcessDate 2026-05-25 -BronzeIngestDate 2026-05-25
+powershell -ExecutionPolicy Bypass -File scripts/setup/validate_silver_login_events.ps1 -ProcessDate 2026-05-25
+
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_gold_transaction_monitoring.ps1 -ProcessDate 2026-05-25
+powershell -ExecutionPolicy Bypass -File scripts/setup/validate_gold_transaction_monitoring.ps1 -ProcessDate 2026-05-25
+
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_gold_fraud_investigation.ps1 -ProcessDate 2026-05-25 -RiskIngestDate 2026-05-25
+powershell -ExecutionPolicy Bypass -File scripts/setup/validate_gold_fraud_investigation.ps1 -ProcessDate 2026-05-25
+```
+
+Refresh and inspect pipeline health:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/run_gold_pipeline_health.ps1 -ProcessDate 2026-05-25
+powershell -ExecutionPolicy Bypass -File scripts/setup/show_latest_pipeline_health.ps1 -ProcessDate 2026-05-25
+```
+
+Expected healthy signals:
+
+- Silver card authorizations writes 1,500 records with 0 rejected records.
+- Silver login events writes valid login records with 0 rejected records.
+- Gold transaction monitoring writes 10 aggregate rows.
+- Gold fraud investigation writes 3 case rows.
+- Latest pipeline health shows success for Silver and Gold jobs.
