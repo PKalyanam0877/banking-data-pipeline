@@ -2,16 +2,82 @@
 
 This project simulates an enterprise banking data platform using synthetic data.
 
-## Phase 1 Architecture
+## Architecture
 
-The platform follows a hybrid streaming, CDC, and batch lakehouse architecture:
+The platform follows a hybrid streaming, CDC, and batch lakehouse architecture.
+It is designed to look like a small banking data platform running locally with
+Docker Compose.
+
+```mermaid
+flowchart LR
+    subgraph Sources
+        postgres["PostgreSQL core banking"]
+        producers["Synthetic event producers"]
+    end
+
+    subgraph Streaming
+        debezium["Debezium CDC"]
+        kafka["Kafka topics"]
+    end
+
+    subgraph Lakehouse
+        bronze["MinIO Bronze raw/audit layer"]
+        silver["Silver cleaned datasets"]
+        quarantine["Quarantine rejected records"]
+        gold["Gold business datasets"]
+    end
+
+    subgraph Processing
+        airflow["Airflow orchestration"]
+        python_jobs["Python processing jobs"]
+        spark["Spark standalone practice jobs"]
+        quality["Validation checks"]
+    end
+
+    subgraph Observability
+        audit["Pipeline audit records"]
+        health["Gold pipeline health"]
+    end
+
+    postgres --> debezium --> kafka
+    producers --> kafka
+    airflow --> producers
+    airflow --> python_jobs
+    kafka --> bronze
+    python_jobs --> bronze
+    bronze --> silver
+    silver --> gold
+    bronze --> quarantine
+    quality --> audit
+    python_jobs --> audit
+    audit --> health
+    spark -. distributed processing practice .-> bronze
+```
+
+Core components:
 
 - PostgreSQL simulates core banking system-of-record data.
-- Debezium captures database changes into Kafka.
-- Python producers simulate real-time card, ACH, and digital banking events.
-- MinIO simulates S3-style object storage.
-- Spark will process Bronze, Silver, and Gold data layers.
-- Governance includes PII classification, masking/tokenization, auditability, data quality, and lineage.
+- Debezium captures database changes from PostgreSQL into Kafka CDC topics.
+- Kafka carries card authorization, login, fraud risk, and CDC events.
+- Python producers simulate real-time banking source systems.
+- MinIO provides S3-style object storage for Bronze, Silver, Gold, quarantine, and audit data.
+- Airflow orchestrates the Phase 2 fresh-partition pipeline.
+- Spark standalone services support distributed processing practice.
+- Validation scripts enforce Bronze, Silver, and Gold quality checks.
+- Pipeline audit records feed Gold observability and latest-health outputs.
+
+Medallion data model:
+
+- Bronze keeps raw Kafka messages plus source metadata such as topic, partition, offset, key, and ingest time.
+- Silver applies validation, type normalization, deduplication, and rejected-record quarantine.
+- Gold builds business-ready datasets for transaction monitoring, fraud investigation, and pipeline health.
+
+Operational principles:
+
+- Every run uses explicit `ProcessDate`, `IngestDate`, and `RiskIngestDate` values.
+- Jobs are partition-aware so a date can be replayed without relying on the laptop clock.
+- Rejected records are written to quarantine with source object details and rejection reasons.
+- Audit records capture job status, records read, records written, rejected counts, timing, and output paths.
 
 ## Current State
 
@@ -64,19 +130,58 @@ powershell -ExecutionPolicy Bypass -File scripts/setup/validate_gold_transaction
 This path proves the pipeline can replay a new partition from producers through Gold
 outputs and observability. Replace `2026-05-25` with the business date being tested.
 
-Run the full Phase 2 orchestration wrapper:
+## Phase 2 Airflow Orchestration
+
+Phase 2 introduces Apache Airflow as the orchestration layer for the fresh partition
+pipeline. The DAG is defined in `dags/banking_fresh_partition_pipeline.py`.
+
+Start Airflow with the rest of the local platform:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/setup/run_fresh_partition_pipeline.ps1 -ProcessDate 2026-05-25
+docker compose up -d
 ```
 
-For replaying already-landed Bronze data without producing new Kafka events:
+Open the Airflow UI:
+
+```text
+http://localhost:8088
+```
+
+Default local credentials:
+
+```text
+admin / admin
+```
+
+Trigger the DAG with a JSON config:
+
+```json
+{
+  "process_date": "2026-05-25",
+  "ingest_date": "2026-05-25",
+  "risk_ingest_date": "2026-05-25",
+  "skip_producers": false
+}
+```
+
+For replaying already-landed Bronze data without producing new Kafka events, set:
+
+```json
+{
+  "process_date": "2026-05-25",
+  "ingest_date": "2026-05-25",
+  "risk_ingest_date": "2026-05-25",
+  "skip_producers": true
+}
+```
+
+The same DAG can also be triggered from the command line:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/setup/run_fresh_partition_pipeline.ps1 -ProcessDate 2026-05-25 -SkipProducers
+docker compose exec airflow-scheduler airflow dags trigger banking_fresh_partition_pipeline --conf '{"process_date":"2026-05-25","ingest_date":"2026-05-25","risk_ingest_date":"2026-05-25","skip_producers":false}'
 ```
 
-The manual command sequence below is kept as an expanded reference.
+The manual command sequence below is kept as an expanded reference and fallback.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup/check_platform_health.ps1

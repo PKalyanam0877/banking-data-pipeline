@@ -6,9 +6,13 @@ from confluent_kafka import Producer
 from dotenv import load_dotenv
 
 
+DELIVERY_ERRORS = []
+
+
 def delivery_report(error, message):
     if error is not None:
         print(f"Delivery failed: {error}")
+        DELIVERY_ERRORS.append(str(error))
         return
 
     print(
@@ -140,7 +144,16 @@ def main():
             callback=delivery_report,
         )
 
-    producer.flush()
+    remaining_count = producer.flush()
+
+    if remaining_count > 0:
+        raise RuntimeError(f"{remaining_count} fraud risk events were not delivered")
+
+    if DELIVERY_ERRORS:
+        sample_errors = "; ".join(DELIVERY_ERRORS[:5])
+        raise RuntimeError(
+            f"{len(DELIVERY_ERRORS)} fraud risk events failed delivery: {sample_errors}"
+        )
 
     print(f"Produced {len(events)} fraud risk events")
 

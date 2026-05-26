@@ -20,10 +20,13 @@ SCENARIOS = [
     ("cust_100003", "acct_200004", "card_300003", "799.99", "mrc_100008", "Online Electronics Outlet", "5732", "US", "New York", "declined", "ecommerce", False, "manual_keyed"),
 ]
 
+DELIVERY_ERRORS = []
+
 
 def delivery_report(error, message):
     if error is not None:
         print(f"Delivery failed: {error}")
+        DELIVERY_ERRORS.append(str(error))
         return
 
     print(
@@ -128,7 +131,17 @@ def main():
             callback=delivery_report,
         )
 
-    producer.flush()
+    remaining_count = producer.flush()
+
+    if remaining_count > 0:
+        raise RuntimeError(f"{remaining_count} card authorization events were not delivered")
+
+    if DELIVERY_ERRORS:
+        sample_errors = "; ".join(DELIVERY_ERRORS[:5])
+        raise RuntimeError(
+            f"{len(DELIVERY_ERRORS)} card authorization events failed delivery: "
+            f"{sample_errors}"
+        )
 
     print(f"Produced {len(events)} card authorization events")
 
