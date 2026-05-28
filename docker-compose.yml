@@ -25,9 +25,11 @@ services:
   kafka:
     image: apache/kafka:4.1.2
     container_name: banking_kafka
+    restart: unless-stopped
     ports:
       - "${KAFKA_PORT}:9094"
     environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx768m"
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
@@ -42,6 +44,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     volumes:
       - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
     networks:
       - banking_network
 

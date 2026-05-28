@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pendulum
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -16,11 +18,13 @@ RISK_INGEST_DATE = (
 SKIP_PRODUCERS = '{{ dag_run.conf.get("skip_producers", false) | lower }}'
 
 
-def python_task(task_id: str, command: str) -> BashOperator:
+def python_task(task_id: str, command: str, retries: int = 0) -> BashOperator:
     return BashOperator(
         task_id=task_id,
         bash_command=f"python {command}",
         cwd=PROJECT_DIR,
+        retries=retries,
+        retry_delay=timedelta(seconds=15),
     )
 
 
@@ -44,6 +48,12 @@ with DAG(
     catchup=False,
     tags=["banking", "phase-2", "medallion"],
 ) as dag:
+    ensure_kafka_topics = python_task(
+        "ensure_kafka_topics",
+        "src/processing/bronze/ensure_kafka_topics.py",
+        retries=3,
+    )
+
     produce_card_authorizations = skip_for_replay_task(
         "produce_card_authorizations",
         "src/producers/card_transactions/card_authorization_producer.py --count 1500",
@@ -154,7 +164,8 @@ with DAG(
     )
 
     (
-        produce_card_authorizations
+        ensure_kafka_topics
+        >> produce_card_authorizations
         >> land_card_authorizations_bronze
         >> run_silver_card_authorizations
         >> validate_silver_card_authorizations
@@ -163,13 +174,14 @@ with DAG(
     )
 
     (
-        produce_login_events
+        ensure_kafka_topics
+        >> produce_login_events
         >> land_login_events_bronze
         >> run_silver_login_events
         >> validate_silver_login_events
     )
 
-    produce_risk_events >> land_risk_events_bronze
+    ensure_kafka_topics >> produce_risk_events >> land_risk_events_bronze
 
     [
         validate_silver_card_authorizations,
