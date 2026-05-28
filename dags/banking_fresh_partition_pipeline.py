@@ -44,8 +44,9 @@ with DAG(
     dag_id="banking_fresh_partition_pipeline",
     description="Produce, land, process, validate, and observe a banking pipeline partition.",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
-    schedule=None,
+    schedule="0 2 * * *",
     catchup=False,
+    max_active_runs=1,
     tags=["banking", "phase-2", "medallion"],
 ) as dag:
     ensure_kafka_topics = python_task(
