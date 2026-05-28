@@ -135,6 +135,16 @@ outputs and observability. Replace `2026-05-25` with the business date being tes
 Phase 2 introduces Apache Airflow as the orchestration layer for the fresh partition
 pipeline. The DAG is defined in `dags/banking_fresh_partition_pipeline.py`.
 
+The DAG is scheduled to run daily at `02:00 UTC`:
+
+```text
+0 2 * * *
+```
+
+`catchup` is disabled, and `max_active_runs` is set to `1` so Airflow does not
+run overlapping fresh-partition jobs. Scheduled runs generate new synthetic Kafka
+events because the producer tasks are part of this DAG.
+
 Start Airflow with the rest of the local platform:
 
 ```powershell
@@ -152,6 +162,12 @@ Default local credentials:
 ```text
 admin / admin
 ```
+
+To confirm whether a run was manual or scheduled, open the DAG run in Airflow and
+check **Run type**:
+
+- `manual` means it was started from the UI or with `airflow dags trigger`.
+- `scheduled` means the Airflow scheduler started it from the daily cron schedule.
 
 Trigger the DAG with a JSON config:
 
@@ -179,6 +195,42 @@ The same DAG can also be triggered from the command line:
 
 ```powershell
 docker compose exec airflow-scheduler airflow dags trigger banking_fresh_partition_pipeline --conf '{"process_date":"2026-05-25","ingest_date":"2026-05-25","risk_ingest_date":"2026-05-25","skip_producers":false}'
+```
+
+If PowerShell quoting causes JSON parsing errors, trigger a scheduled-style run
+without JSON config by setting the logical date:
+
+```powershell
+docker compose exec airflow-scheduler airflow dags trigger banking_fresh_partition_pipeline --exec-date 2026-05-25T00:00:00+00:00 --run-id manual__2026_05_25_fresh
+```
+
+Operational checks:
+
+```powershell
+docker compose ps
+docker compose logs --tail 120 airflow-webserver
+docker compose logs --tail 120 airflow-scheduler
+docker compose logs --tail 120 kafka
+```
+
+If the Airflow UI at `http://localhost:8088` refuses the connection, recreate only
+the webserver container:
+
+```powershell
+docker compose up -d --force-recreate airflow-webserver
+```
+
+If Docker Desktop starts returning HTTP 500 errors for Docker commands, restart
+Docker Desktop or run:
+
+```powershell
+wsl --shutdown
+```
+
+Then reopen Docker Desktop and run:
+
+```powershell
+docker compose up -d
 ```
 
 The manual command sequence below is kept as an expanded reference and fallback.
