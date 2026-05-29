@@ -275,6 +275,18 @@ powershell -ExecutionPolicy Bypass -File scripts/setup/run_gold_pipeline_health.
 powershell -ExecutionPolicy Bypass -File scripts/setup/show_latest_pipeline_health.ps1 -ProcessDate 2026-05-25
 ```
 
+Render a local operational dashboard from Gold outputs:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/render_operational_dashboard.ps1 -ProcessDate 2026-05-25
+```
+
+The dashboard is written under:
+
+```text
+data/dashboards/operational_dashboard_YYYY-MM-DD.html
+```
+
 Expected healthy signals:
 
 - Silver card authorizations writes 1,500 records with 0 rejected records.
