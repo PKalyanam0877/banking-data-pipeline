@@ -79,6 +79,34 @@ def text(value):
     return html.escape("" if value is None else str(value))
 
 
+def display_value(value, fallback="Not matched"):
+    if value in (None, ""):
+        return fallback
+    return value
+
+
+def fraud_case_key(record):
+    return (
+        record.get("risk_event_id"),
+        record.get("customer_id"),
+        record.get("source_transaction_id"),
+    )
+
+
+def dedupe_fraud_records(records):
+    unique_records = {}
+    for record in sorted(
+        records,
+        key=lambda item: (
+            int(item.get("risk_score") or 0),
+            item.get("gold_processed_time") or "",
+        ),
+        reverse=True,
+    ):
+        unique_records.setdefault(fraud_case_key(record), record)
+    return list(unique_records.values())
+
+
 def summarize_health(records):
     status_counts = Counter(record.get("status", "unknown") for record in records)
     return {
@@ -103,11 +131,15 @@ def summarize_transactions(records):
 
 def summarize_fraud(records):
     high_risk_levels = {"medium_high", "high"}
+    unique_records = dedupe_fraud_records(records)
+    duplicate_count = max(len(records) - len(unique_records), 0)
     return {
-        "cases": len(records),
-        "high_risk": sum(1 for record in records if record.get("risk_level") in high_risk_levels),
-        "max_score": max((int(record.get("risk_score") or 0) for record in records), default=0),
-        "failed_logins": sum(int(record.get("failed_login_count") or 0) for record in records),
+        "cases": len(unique_records),
+        "raw_cases": len(records),
+        "duplicates": duplicate_count,
+        "high_risk": sum(1 for record in unique_records if record.get("risk_level") in high_risk_levels),
+        "max_score": max((int(record.get("risk_score") or 0) for record in unique_records), default=0),
+        "failed_logins": sum(int(record.get("failed_login_count") or 0) for record in unique_records),
     }
 
 
@@ -188,8 +220,9 @@ def render_fraud_table(records):
     if not records:
         return '<p class="empty">No fraud investigation records found for this process date.</p>'
 
+    unique_records = dedupe_fraud_records(records)
     top_records = sorted(
-        records,
+        unique_records,
         key=lambda item: int(item.get("risk_score") or 0),
         reverse=True,
     )[:10]
@@ -203,7 +236,7 @@ def render_fraud_table(records):
             f"<td>{text(record.get('risk_level'))}</td>"
             f"<td>{text(record.get('recommended_action'))}</td>"
             f"<td class=\"num\">{number(record.get('failed_login_count'))}</td>"
-            f"<td>{text(record.get('merchant_name'))}</td>"
+            f"<td>{text(display_value(record.get('merchant_name')))}</td>"
             "</tr>"
         )
 
@@ -222,6 +255,7 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
     transactions = summarize_transactions(transaction_records)
     fraud = summarize_fraud(fraud_records)
     health_tone = "good" if health["failed"] == 0 and health["jobs"] > 0 else "warn"
+    duplicate_tone = "warn" if fraud["duplicates"] else "good"
 
     html_body = f"""<!doctype html>
 <html lang="en">
@@ -262,7 +296,7 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
     main {{ padding: 24px 28px 32px; max-width: 1440px; margin: 0 auto; }}
     .metrics {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 12px;
       margin-bottom: 22px;
     }}
@@ -320,8 +354,9 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
       {render_kpi("Rejected Records", number(health["rejected"]), "latest job health", "bad" if health["rejected"] else "good")}
       {render_kpi("Transactions", number(transactions["transactions"]), f"{money(transactions['amount'])} total amount", "violet")}
       {render_kpi("Declines", number(transactions["declined"]), f"{number(transactions['approved'])} approved", "warn" if transactions["declined"] else "good")}
-      {render_kpi("Fraud Cases", number(fraud["cases"]), f"{fraud['high_risk']} medium-high/high", "bad" if fraud["high_risk"] else "good")}
+      {render_kpi("Fraud Cases", number(fraud["cases"]), f"{fraud['high_risk']} medium-high/high after dedupe", "bad" if fraud["high_risk"] else "good")}
       {render_kpi("Max Risk Score", number(fraud["max_score"]), f"{number(fraud['failed_logins'])} failed logins", "bad" if fraud["max_score"] >= 90 else "warn")}
+      {render_kpi("Duplicate Cases", number(fraud["duplicates"]), f"{number(fraud['raw_cases'])} raw case rows", duplicate_tone)}
     </div>
 
     <section class="band">
