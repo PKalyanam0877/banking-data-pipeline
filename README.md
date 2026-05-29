@@ -111,6 +111,40 @@ Current engineering focus:
 - Auditability through Kafka topic, partition, offset, and ingest metadata
 - Rejected-record traceability through quarantine records
 
+## Dashboard Demo
+
+The project includes a generated local operations dashboard built from Gold
+outputs in MinIO. It is rendered as static HTML so it can be refreshed from
+Airflow without running a separate web application.
+
+Render the dashboard for a process date:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/render_operational_dashboard.ps1 -ProcessDate 2026-05-28
+```
+
+Open the generated file:
+
+```text
+data/dashboards/operational_dashboard_2026-05-28.html
+```
+
+The dashboard demonstrates:
+
+- pipeline health KPIs from the latest Gold health dataset
+- records moved, rejected records, and job status by partition
+- transaction monitoring KPIs, approval mix, amount by channel, and top aggregates
+- fraud investigation KPIs, fraud risk levels, and top investigation cases
+- duplicate fraud case detection from repeated runs
+- unmatched fraud-to-transaction joins shown as operational signals
+
+For a demo walkthrough, show:
+
+- Airflow DAG grid with the `render_operational_dashboard` final task
+- the dashboard KPI strip and Operations Summary section
+- Approval Mix, Amount by Channel, and Fraud Risk Levels charts
+- Pipeline Health, Transaction Monitoring, and Fraud Investigation tables
+
 ## Recommended Run Pattern
 
 Use an explicit business date instead of relying on the server clock:
