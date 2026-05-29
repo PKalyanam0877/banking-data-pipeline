@@ -120,6 +120,7 @@ Airflow without running a separate web application.
 Render the dashboard for a process date:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/evaluate_monitoring_rules.ps1 -ProcessDate 2026-05-28
 powershell -ExecutionPolicy Bypass -File scripts/setup/render_operational_dashboard.ps1 -ProcessDate 2026-05-28
 ```
 
@@ -132,6 +133,7 @@ data/dashboards/operational_dashboard_2026-05-28.html
 The dashboard demonstrates:
 
 - pipeline health KPIs from the latest Gold health dataset
+- monitoring rule status and warning/critical findings
 - records moved, rejected records, and job status by partition
 - transaction monitoring KPIs, approval mix, amount by channel, and top aggregates
 - fraud investigation KPIs, fraud risk levels, and top investigation cases
@@ -141,7 +143,7 @@ The dashboard demonstrates:
 For a demo walkthrough, show:
 
 - Airflow DAG grid with the `render_operational_dashboard` final task
-- the dashboard KPI strip and Operations Summary section
+- the dashboard KPI strip, Monitoring Findings, and Operations Summary section
 - Approval Mix, Amount by Channel, and Fraud Risk Levels charts
 - Pipeline Health, Transaction Monitoring, and Fraud Investigation tables
 
@@ -309,6 +311,12 @@ powershell -ExecutionPolicy Bypass -File scripts/setup/run_gold_pipeline_health.
 powershell -ExecutionPolicy Bypass -File scripts/setup/show_latest_pipeline_health.ps1 -ProcessDate 2026-05-25
 ```
 
+Evaluate monitoring rules:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/evaluate_monitoring_rules.ps1 -ProcessDate 2026-05-25
+```
+
 Render a local operational dashboard from Gold outputs:
 
 ```powershell
@@ -319,6 +327,12 @@ The dashboard is written under:
 
 ```text
 data/dashboards/operational_dashboard_YYYY-MM-DD.html
+```
+
+The monitoring report is written under:
+
+```text
+data/monitoring/monitoring_report_YYYY-MM-DD.json
 ```
 
 Expected healthy signals:

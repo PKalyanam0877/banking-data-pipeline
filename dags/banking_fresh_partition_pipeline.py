@@ -164,6 +164,11 @@ with DAG(
         f"src/quality/audit/show_latest_pipeline_health.py --process-date {PROCESS_DATE}",
     )
 
+    evaluate_monitoring_rules = python_task(
+        "evaluate_monitoring_rules",
+        f"src/quality/audit/evaluate_monitoring_rules.py --process-date {PROCESS_DATE}",
+    )
+
     render_operational_dashboard = python_task(
         "render_operational_dashboard",
         f"src/quality/audit/render_operational_dashboard.py --process-date {PROCESS_DATE}",
@@ -198,4 +203,6 @@ with DAG(
     [
         validate_gold_transaction_monitoring,
         validate_gold_fraud_investigation,
-    ] >> run_gold_pipeline_health >> show_latest_pipeline_health >> render_operational_dashboard
+    ] >> run_gold_pipeline_health >> show_latest_pipeline_health >> evaluate_monitoring_rules
+
+    evaluate_monitoring_rules >> render_operational_dashboard

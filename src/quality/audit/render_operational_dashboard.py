@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 PIPELINE_HEALTH_PREFIX = "platform-observability/pipeline-health-latest/"
 TRANSACTION_MONITORING_PREFIX = "transaction-monitoring/dashboard/"
 FRAUD_CASES_PREFIX = "fraud-investigation/cases/"
+MONITORING_REPORT_DIR = Path("data/monitoring")
 
 
 def parse_args():
@@ -83,6 +84,13 @@ def display_value(value, fallback="Not matched"):
     if value in (None, ""):
         return fallback
     return value
+
+
+def read_monitoring_report(process_date):
+    report_path = MONITORING_REPORT_DIR / f"monitoring_report_{process_date}.json"
+    if not report_path.exists():
+        return None
+    return json.loads(report_path.read_text(encoding="utf-8"))
 
 
 def fraud_case_key(record):
@@ -277,6 +285,43 @@ def render_operations_summary(severity, messages):
     )
 
 
+def monitoring_tone(report):
+    if not report:
+        return "warn"
+    status = report.get("status")
+    if status == "healthy":
+        return "good"
+    if status == "critical":
+        return "bad"
+    return "warn"
+
+
+def render_monitoring_findings(report):
+    if not report:
+        return (
+            '<section class="summary warn">'
+            "<h2>Monitoring Findings</h2>"
+            "<ul><li>No monitoring report was generated for this process date.</li></ul>"
+            "</section>"
+        )
+
+    findings = report.get("findings", [])
+    if not findings:
+        rows = "<li>No monitoring findings detected.</li>"
+    else:
+        rows = "".join(
+            f"<li><strong>{text(finding.get('severity'))}</strong>: {text(finding.get('message'))}</li>"
+            for finding in findings
+        )
+
+    return (
+        f'<section class="summary {monitoring_tone(report)}">'
+        "<h2>Monitoring Findings</h2>"
+        f"<ul>{rows}</ul>"
+        "</section>"
+    )
+
+
 def render_health_table(records):
     if not records:
         return '<p class="empty">No pipeline health records found for this process date.</p>'
@@ -369,7 +414,14 @@ def render_fraud_table(records):
     )
 
 
-def render_dashboard(process_date, health_records, transaction_records, fraud_records, sources):
+def render_dashboard(
+    process_date,
+    health_records,
+    transaction_records,
+    fraud_records,
+    sources,
+    monitoring_report=None,
+):
     generated_at = datetime.now(UTC).isoformat()
     health = summarize_health(health_records)
     transactions = summarize_transactions(transaction_records)
@@ -382,6 +434,8 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
         fraud,
         fraud_records,
     )
+    monitoring_findings = len(monitoring_report.get("findings", [])) if monitoring_report else 0
+    monitoring_status = monitoring_report.get("status", "missing") if monitoring_report else "missing"
 
     html_body = f"""<!doctype html>
 <html lang="en">
@@ -533,7 +587,10 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
       {render_kpi("Fraud Cases", number(fraud["cases"]), f"{fraud['high_risk']} medium-high/high after dedupe", "bad" if fraud["high_risk"] else "good")}
       {render_kpi("Max Risk Score", number(fraud["max_score"]), f"{number(fraud['failed_logins'])} failed logins", "bad" if fraud["max_score"] >= 90 else "warn")}
       {render_kpi("Duplicate Cases", number(fraud["duplicates"]), f"{number(fraud['raw_cases'])} raw case rows", duplicate_tone)}
+      {render_kpi("Monitoring Status", monitoring_status, f"{monitoring_findings} findings", monitoring_tone(monitoring_report))}
     </div>
+
+    {render_monitoring_findings(monitoring_report)}
 
     {render_operations_summary(summary_severity, summary_messages)}
 
@@ -612,10 +669,18 @@ def main():
         ),
         "fraud": f"s3://{gold_bucket}/{fraud_keys[0]}" if fraud_keys else "missing fraud cases",
     }
+    monitoring_report = read_monitoring_report(process_date)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        render_dashboard(process_date, health_records, transaction_records, fraud_records, sources),
+        render_dashboard(
+            process_date,
+            health_records,
+            transaction_records,
+            fraud_records,
+            sources,
+            monitoring_report,
+        ),
         encoding="utf-8",
     )
 
@@ -624,6 +689,11 @@ def main():
     print(f"Pipeline health records: {len(health_records)}")
     print(f"Transaction monitoring records: {len(transaction_records)}")
     print(f"Fraud investigation records: {len(fraud_records)}")
+    if monitoring_report:
+        print(f"Monitoring status: {monitoring_report.get('status')}")
+        print(f"Monitoring findings: {len(monitoring_report.get('findings', []))}")
+    else:
+        print("Monitoring status: missing")
     print(f"Output: {output_path.resolve()}")
 
 
