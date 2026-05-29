@@ -107,6 +107,12 @@ def dedupe_fraud_records(records):
     return list(unique_records.values())
 
 
+def percent(part, whole):
+    if not whole:
+        return 0
+    return round((Decimal(part) / Decimal(whole)) * Decimal("100"), 1)
+
+
 def summarize_health(records):
     status_counts = Counter(record.get("status", "unknown") for record in records)
     return {
@@ -143,6 +149,46 @@ def summarize_fraud(records):
     }
 
 
+def build_operations_summary(health, transactions, fraud, fraud_records):
+    messages = []
+    severity = "good"
+
+    if health["failed"]:
+        messages.append(f"{health['failed']} pipeline job is not successful.")
+        severity = "bad"
+    else:
+        messages.append("All latest pipeline jobs are successful.")
+
+    if health["rejected"]:
+        messages.append(f"{number(health['rejected'])} records were rejected.")
+        severity = "bad"
+    else:
+        messages.append("No rejected records in latest job health.")
+
+    if fraud["duplicates"]:
+        messages.append(
+            f"{number(fraud['duplicates'])} duplicate fraud case rows detected across repeated runs."
+        )
+        if severity != "bad":
+            severity = "warn"
+
+    unmatched_merchants = sum(
+        1
+        for record in dedupe_fraud_records(fraud_records)
+        if record.get("merchant_name") in (None, "")
+    )
+    if unmatched_merchants:
+        messages.append(f"{number(unmatched_merchants)} fraud cases have no matched merchant.")
+        if severity != "bad":
+            severity = "warn"
+
+    if transactions["declined"]:
+        decline_rate = percent(transactions["declined"], transactions["transactions"])
+        messages.append(f"Decline rate is {decline_rate}% for this partition.")
+
+    return severity, messages
+
+
 def status_class(status):
     return "ok" if status == "success" else "bad"
 
@@ -153,6 +199,80 @@ def render_kpi(label, value, note="", tone="neutral"):
         f"<span>{text(label)}</span>"
         f"<strong>{text(value)}</strong>"
         f"<small>{text(note)}</small>"
+        "</section>"
+    )
+
+
+def render_bar(label, value, total, tone="accent", suffix=""):
+    width = percent(value, total)
+    return (
+        '<div class="bar-row">'
+        f"<span>{text(label)}</span>"
+        '<div class="bar-track">'
+        f'<div class="bar-fill {tone}" style="width: {width}%"></div>'
+        "</div>"
+        f"<strong>{text(number(value))}{text(suffix)}</strong>"
+        "</div>"
+    )
+
+
+def render_chart_card(title, bars, empty_message):
+    if not bars:
+        body = f'<p class="empty compact">{text(empty_message)}</p>'
+    else:
+        body = "".join(bars)
+    return f'<section class="chart-card"><h3>{text(title)}</h3>{body}</section>'
+
+
+def render_charts(transaction_records, fraud_records):
+    transaction_summary = summarize_transactions(transaction_records)
+    unique_fraud_records = dedupe_fraud_records(fraud_records)
+    risk_counts = Counter(record.get("risk_level", "unknown") for record in unique_fraud_records)
+    channel_amounts = Counter()
+
+    for record in transaction_records:
+        channel_amounts[record.get("channel", "unknown")] += Decimal(
+            str(record.get("total_amount") or "0")
+        )
+
+    status_bars = [
+        render_bar("Approved", transaction_summary["approved"], transaction_summary["transactions"], "good"),
+        render_bar("Declined", transaction_summary["declined"], transaction_summary["transactions"], "warn"),
+    ]
+
+    amount_total = sum(channel_amounts.values())
+    channel_bars = [
+        render_bar(
+            channel,
+            int(amount),
+            int(amount_total),
+            "violet" if channel == "ecommerce" else "accent",
+            "",
+        )
+        for channel, amount in channel_amounts.most_common()
+    ]
+
+    risk_total = sum(risk_counts.values())
+    risk_bars = [
+        render_bar(risk_level, count, risk_total, "bad" if risk_level == "high" else "warn")
+        for risk_level, count in risk_counts.most_common()
+    ]
+
+    return (
+        '<div class="charts">'
+        + render_chart_card("Approval Mix", status_bars, "No transaction status records.")
+        + render_chart_card("Amount by Channel", channel_bars, "No channel amount records.")
+        + render_chart_card("Fraud Risk Levels", risk_bars, "No fraud case records.")
+        + "</div>"
+    )
+
+
+def render_operations_summary(severity, messages):
+    rows = "".join(f"<li>{text(message)}</li>" for message in messages)
+    return (
+        f'<section class="summary {severity}">'
+        "<h2>Operations Summary</h2>"
+        f"<ul>{rows}</ul>"
         "</section>"
     )
 
@@ -256,6 +376,12 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
     fraud = summarize_fraud(fraud_records)
     health_tone = "good" if health["failed"] == 0 and health["jobs"] > 0 else "warn"
     duplicate_tone = "warn" if fraud["duplicates"] else "good"
+    summary_severity, summary_messages = build_operations_summary(
+        health,
+        transactions,
+        fraud,
+        fraud_records,
+    )
 
     html_body = f"""<!doctype html>
 <html lang="en">
@@ -275,6 +401,7 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
       --warn: #9a6700;
       --accent: #22577a;
       --violet: #5b4b8a;
+      --soft: #eef3f8;
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -315,6 +442,54 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
     .metric span {{ display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; }}
     .metric strong {{ display: block; margin-top: 8px; font-size: 28px; }}
     .metric small {{ display: block; margin-top: 6px; color: var(--muted); }}
+    .summary {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--good);
+      border-radius: 6px;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+    }}
+    .summary.warn {{ border-left-color: var(--warn); }}
+    .summary.bad {{ border-left-color: var(--bad); }}
+    .summary h2 {{ margin: 0 0 8px; font-size: 17px; }}
+    .summary ul {{ margin: 0; padding-left: 18px; color: var(--muted); }}
+    .summary li {{ margin: 5px 0; }}
+    .charts {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }}
+    .chart-card {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px 16px;
+    }}
+    .chart-card h3 {{ margin: 0 0 12px; font-size: 16px; }}
+    .bar-row {{
+      display: grid;
+      grid-template-columns: 96px minmax(120px, 1fr) 72px;
+      gap: 10px;
+      align-items: center;
+      margin: 10px 0;
+    }}
+    .bar-row span {{ color: var(--muted); }}
+    .bar-row strong {{ text-align: right; font-variant-numeric: tabular-nums; }}
+    .bar-track {{
+      height: 12px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+    }}
+    .bar-fill {{ height: 100%; background: var(--accent); }}
+    .bar-fill.good {{ background: var(--good); }}
+    .bar-fill.warn {{ background: var(--warn); }}
+    .bar-fill.bad {{ background: var(--bad); }}
+    .bar-fill.violet {{ background: var(--violet); }}
+    .bar-fill.accent {{ background: var(--accent); }}
     section.band {{
       background: var(--panel);
       border: 1px solid var(--line);
@@ -338,6 +513,7 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
     .pill.ok {{ color: white; background: var(--good); }}
     .pill.bad {{ color: white; background: var(--bad); }}
     .empty {{ margin: 0; padding: 16px; color: var(--muted); }}
+    .empty.compact {{ padding: 0; }}
     footer {{ margin-top: 18px; color: var(--muted); font-size: 12px; line-height: 1.5; }}
     code {{ background: #e8edf3; padding: 2px 5px; border-radius: 4px; }}
   </style>
@@ -358,6 +534,10 @@ def render_dashboard(process_date, health_records, transaction_records, fraud_re
       {render_kpi("Max Risk Score", number(fraud["max_score"]), f"{number(fraud['failed_logins'])} failed logins", "bad" if fraud["max_score"] >= 90 else "warn")}
       {render_kpi("Duplicate Cases", number(fraud["duplicates"]), f"{number(fraud['raw_cases'])} raw case rows", duplicate_tone)}
     </div>
+
+    {render_operations_summary(summary_severity, summary_messages)}
+
+    {render_charts(transaction_records, fraud_records)}
 
     <section class="band">
       <h2>Pipeline Health</h2>
