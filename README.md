@@ -111,6 +111,68 @@ Current engineering focus:
 - Auditability through Kafka topic, partition, offset, and ingest metadata
 - Rejected-record traceability through quarantine records
 
+## What This Project Demonstrates
+
+This repository is designed as a practical banking data engineering portfolio
+project. It demonstrates:
+
+- event-driven ingestion with Kafka producers and CDC-style infrastructure
+- Bronze, Silver, and Gold medallion processing over S3-compatible storage
+- partition-aware replay using explicit business dates
+- data quality validation and rejected-record quarantine
+- Airflow orchestration with scheduled and manual DAG runs
+- pipeline audit records and latest-health Gold observability outputs
+- monitoring rules that convert Gold outputs into operational findings
+- local alert delivery with append-only alert history
+- a static operations dashboard for pipeline, transaction, fraud, monitoring, and alert review
+
+## End-to-End Demo
+
+Start the local platform:
+
+```powershell
+docker compose up -d
+```
+
+Open Airflow:
+
+```text
+http://localhost:8088
+```
+
+Trigger the fresh partition DAG from Airflow, or use the command line:
+
+```powershell
+docker compose exec airflow-scheduler airflow dags trigger banking_fresh_partition_pipeline --exec-date 2026-05-28T00:00:00+00:00 --run-id manual__2026_05_28_demo
+```
+
+The DAG runs the full operational flow:
+
+```text
+Kafka producers
+  -> Bronze landing
+  -> Silver cleansing and validation
+  -> Gold transaction monitoring and fraud investigation
+  -> Gold pipeline health
+  -> monitoring rules
+  -> local alert delivery
+  -> operational dashboard render
+```
+
+For a focused replay demo against existing Gold outputs:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/evaluate_monitoring_rules.ps1 -ProcessDate 2026-05-28
+powershell -ExecutionPolicy Bypass -File scripts/setup/deliver_monitoring_alerts.ps1 -ProcessDate 2026-05-28
+powershell -ExecutionPolicy Bypass -File scripts/setup/render_operational_dashboard.ps1 -ProcessDate 2026-05-28
+```
+
+Open the generated dashboard:
+
+```text
+data/dashboards/operational_dashboard_2026-05-28.html
+```
+
 ## Dashboard Demo
 
 The project includes a generated local operations dashboard built from Gold
@@ -148,6 +210,54 @@ For a demo walkthrough, show:
 - the dashboard KPI strip, Monitoring Findings, Alert Delivery, and Operations Summary section
 - Approval Mix, Amount by Channel, and Fraud Risk Levels charts
 - Pipeline Health, Transaction Monitoring, and Fraud Investigation tables
+
+## Operational Monitoring & Alerting
+
+Monitoring is built on top of Gold outputs so alerts are based on curated,
+business-ready data rather than raw task logs.
+
+The monitoring evaluator reads:
+
+- latest Gold pipeline health
+- Gold transaction monitoring aggregates
+- Gold fraud investigation cases
+
+It writes a monitoring report:
+
+```text
+data/monitoring/monitoring_report_YYYY-MM-DD.json
+```
+
+Current monitoring rules detect:
+
+- missing Gold outputs
+- non-success latest pipeline jobs
+- rejected records in latest pipeline health
+- high transaction decline rate
+- high fraud risk score
+- duplicate fraud case rows across repeated runs
+- fraud cases without matched merchant context
+
+Alert delivery converts monitoring findings into local alert records. This keeps
+the demo self-contained while still showing the production pattern: findings
+become delivered alerts and an auditable alert history.
+
+Alert outputs:
+
+```text
+data/monitoring/alert_history.jsonl
+data/monitoring/alert_summary_YYYY-MM-DD.json
+```
+
+In Airflow, the operational tail of the DAG is:
+
+```text
+run_gold_pipeline_health
+  -> show_latest_pipeline_health
+  -> evaluate_monitoring_rules
+  -> deliver_monitoring_alerts
+  -> render_operational_dashboard
+```
 
 ## Recommended Run Pattern
 
