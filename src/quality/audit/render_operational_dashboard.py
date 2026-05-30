@@ -93,6 +93,13 @@ def read_monitoring_report(process_date):
     return json.loads(report_path.read_text(encoding="utf-8"))
 
 
+def read_alert_summary(process_date):
+    summary_path = MONITORING_REPORT_DIR / f"alert_summary_{process_date}.json"
+    if not summary_path.exists():
+        return None
+    return json.loads(summary_path.read_text(encoding="utf-8"))
+
+
 def fraud_case_key(record):
     return (
         record.get("risk_event_id"),
@@ -322,6 +329,37 @@ def render_monitoring_findings(report):
     )
 
 
+def render_alert_delivery(summary):
+    if not summary:
+        return (
+            '<section class="summary warn">'
+            "<h2>Alert Delivery</h2>"
+            "<ul><li>No alert delivery summary was generated for this process date.</li></ul>"
+            "</section>"
+        )
+
+    alert_count = int(summary.get("alert_count") or 0)
+    if alert_count == 0:
+        rows = "<li>No alerts were delivered because no monitoring findings were detected.</li>"
+    else:
+        rows = "".join(
+            f"<li><strong>{text(alert.get('severity'))}</strong>: {text(alert.get('message'))}</li>"
+            for alert in summary.get("alerts", [])[:8]
+        )
+
+    rows += (
+        f"<li>Channel: {text(summary.get('channel'))}; "
+        f"history: {text(summary.get('history_path'))}</li>"
+    )
+
+    return (
+        f'<section class="summary {monitoring_tone({"status": summary.get("monitoring_status")})}">'
+        "<h2>Alert Delivery</h2>"
+        f"<ul>{rows}</ul>"
+        "</section>"
+    )
+
+
 def render_health_table(records):
     if not records:
         return '<p class="empty">No pipeline health records found for this process date.</p>'
@@ -421,6 +459,7 @@ def render_dashboard(
     fraud_records,
     sources,
     monitoring_report=None,
+    alert_summary=None,
 ):
     generated_at = datetime.now(UTC).isoformat()
     health = summarize_health(health_records)
@@ -436,6 +475,8 @@ def render_dashboard(
     )
     monitoring_findings = len(monitoring_report.get("findings", [])) if monitoring_report else 0
     monitoring_status = monitoring_report.get("status", "missing") if monitoring_report else "missing"
+    alert_count = int(alert_summary.get("alert_count") or 0) if alert_summary else 0
+    alert_tone = monitoring_tone({"status": alert_summary.get("monitoring_status")}) if alert_summary else "warn"
 
     html_body = f"""<!doctype html>
 <html lang="en">
@@ -588,9 +629,11 @@ def render_dashboard(
       {render_kpi("Max Risk Score", number(fraud["max_score"]), f"{number(fraud['failed_logins'])} failed logins", "bad" if fraud["max_score"] >= 90 else "warn")}
       {render_kpi("Duplicate Cases", number(fraud["duplicates"]), f"{number(fraud['raw_cases'])} raw case rows", duplicate_tone)}
       {render_kpi("Monitoring Status", monitoring_status, f"{monitoring_findings} findings", monitoring_tone(monitoring_report))}
+      {render_kpi("Alerts Delivered", number(alert_count), "local alert history", alert_tone)}
     </div>
 
     {render_monitoring_findings(monitoring_report)}
+    {render_alert_delivery(alert_summary)}
 
     {render_operations_summary(summary_severity, summary_messages)}
 
@@ -670,6 +713,7 @@ def main():
         "fraud": f"s3://{gold_bucket}/{fraud_keys[0]}" if fraud_keys else "missing fraud cases",
     }
     monitoring_report = read_monitoring_report(process_date)
+    alert_summary = read_alert_summary(process_date)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
@@ -680,6 +724,7 @@ def main():
             fraud_records,
             sources,
             monitoring_report,
+            alert_summary,
         ),
         encoding="utf-8",
     )
@@ -694,6 +739,10 @@ def main():
         print(f"Monitoring findings: {len(monitoring_report.get('findings', []))}")
     else:
         print("Monitoring status: missing")
+    if alert_summary:
+        print(f"Alerts delivered: {alert_summary.get('alert_count')}")
+    else:
+        print("Alerts delivered: missing")
     print(f"Output: {output_path.resolve()}")
 
 

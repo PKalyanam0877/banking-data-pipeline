@@ -121,6 +121,7 @@ Render the dashboard for a process date:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup/evaluate_monitoring_rules.ps1 -ProcessDate 2026-05-28
+powershell -ExecutionPolicy Bypass -File scripts/setup/deliver_monitoring_alerts.ps1 -ProcessDate 2026-05-28
 powershell -ExecutionPolicy Bypass -File scripts/setup/render_operational_dashboard.ps1 -ProcessDate 2026-05-28
 ```
 
@@ -134,6 +135,7 @@ The dashboard demonstrates:
 
 - pipeline health KPIs from the latest Gold health dataset
 - monitoring rule status and warning/critical findings
+- local alert delivery summary and append-only alert history
 - records moved, rejected records, and job status by partition
 - transaction monitoring KPIs, approval mix, amount by channel, and top aggregates
 - fraud investigation KPIs, fraud risk levels, and top investigation cases
@@ -143,7 +145,7 @@ The dashboard demonstrates:
 For a demo walkthrough, show:
 
 - Airflow DAG grid with the `render_operational_dashboard` final task
-- the dashboard KPI strip, Monitoring Findings, and Operations Summary section
+- the dashboard KPI strip, Monitoring Findings, Alert Delivery, and Operations Summary section
 - Approval Mix, Amount by Channel, and Fraud Risk Levels charts
 - Pipeline Health, Transaction Monitoring, and Fraud Investigation tables
 
@@ -317,6 +319,12 @@ Evaluate monitoring rules:
 powershell -ExecutionPolicy Bypass -File scripts/setup/evaluate_monitoring_rules.ps1 -ProcessDate 2026-05-25
 ```
 
+Deliver local alert notifications and append alert history:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup/deliver_monitoring_alerts.ps1 -ProcessDate 2026-05-25
+```
+
 Render a local operational dashboard from Gold outputs:
 
 ```powershell
@@ -333,6 +341,13 @@ The monitoring report is written under:
 
 ```text
 data/monitoring/monitoring_report_YYYY-MM-DD.json
+```
+
+Alert delivery writes an append-only history and latest summary under:
+
+```text
+data/monitoring/alert_history.jsonl
+data/monitoring/alert_summary_YYYY-MM-DD.json
 ```
 
 Expected healthy signals:
