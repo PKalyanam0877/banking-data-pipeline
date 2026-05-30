@@ -154,7 +154,10 @@ services:
       - banking_network
 
   airflow-init:
-    image: apache/airflow:2.10.5-python3.11
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: banking-airflow:2.10.5-python3.11
     container_name: banking_airflow_init
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:
@@ -166,7 +169,6 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_WWW_USER_USERNAME:-admin}
       AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_WWW_USER_PASSWORD:-admin}
-      _PIP_ADDITIONAL_REQUIREMENTS: "-r /opt/airflow/project/requirements.txt"
     command:
       - bash
       - -c
@@ -187,7 +189,10 @@ services:
       - banking_network
 
   airflow-webserver:
-    image: apache/airflow:2.10.5-python3.11
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: banking-airflow:2.10.5-python3.11
     container_name: banking_airflow_webserver
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:
@@ -212,7 +217,6 @@ services:
       SILVER_BUCKET: ${SILVER_BUCKET}
       GOLD_BUCKET: ${GOLD_BUCKET}
       QUARANTINE_BUCKET: ${QUARANTINE_BUCKET:-banking-quarantine}
-      _PIP_ADDITIONAL_REQUIREMENTS: "-r /opt/airflow/project/requirements.txt"
     command: webserver
     volumes:
       - ./dags:/opt/airflow/dags
@@ -222,7 +226,10 @@ services:
       - banking_network
 
   airflow-scheduler:
-    image: apache/airflow:2.10.5-python3.11
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: banking-airflow:2.10.5-python3.11
     container_name: banking_airflow_scheduler
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:
@@ -245,7 +252,6 @@ services:
       SILVER_BUCKET: ${SILVER_BUCKET}
       GOLD_BUCKET: ${GOLD_BUCKET}
       QUARANTINE_BUCKET: ${QUARANTINE_BUCKET:-banking-quarantine}
-      _PIP_ADDITIONAL_REQUIREMENTS: "-r /opt/airflow/project/requirements.txt"
     command: scheduler
     volumes:
       - ./dags:/opt/airflow/dags

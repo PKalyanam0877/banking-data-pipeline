@@ -299,6 +299,16 @@ Start Airflow with the rest of the local platform:
 docker compose up -d
 ```
 
+Airflow uses a local custom image defined in `docker/airflow/Dockerfile`.
+Project Python dependencies are installed when the image is built, not every
+time the webserver or scheduler starts. Rebuild the image after changing
+`requirements.txt`:
+
+```powershell
+docker compose build airflow-init airflow-webserver airflow-scheduler
+docker compose up -d
+```
+
 Open the Airflow UI:
 
 ```text
